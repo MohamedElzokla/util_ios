@@ -38,7 +38,7 @@
     }
     return 1;
 }
--(NSArray *)fetchFromEntity:(NSString *)entityName{
+-(NSArray*)fetchAllRecords{
     NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
     
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] initWithEntityName:_entityName];
@@ -46,10 +46,18 @@
     return result;
     
 }
--(NSArray *)fetchFromEntity:(NSString *)entityName WithPredicate:(NSPredicate*)predicate{
+-(NSArray *)fetchRecordsWithPredicate:(NSPredicate *)predicate{
     NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] initWithEntityName:_entityName];
     [fetchRequest setPredicate:predicate];
+    NSArray * result = [[managedObjectContext executeFetchRequest:fetchRequest error:nil] mutableCopy];
+    return result;
+    
+}
+-(NSArray *)fetchRecordsWithKey:(NSString *)key value:(NSString *)value{
+    NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
+    NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] initWithEntityName:_entityName];
+    [fetchRequest setPredicate:[NSPredicate predicateWithFormat:@"%K == %@",key,value]];
     NSArray * result = [[managedObjectContext executeFetchRequest:fetchRequest error:nil] mutableCopy];
     return result;
     
@@ -67,20 +75,32 @@
 }
 
 -(NSInteger)deleteRecordsWithPredicate:(NSPredicate *)predicate{
-    NSArray * fetchedRecords = [self fetchFromEntity:_entityName WithPredicate:predicate];
-    NSInteger flag = 0;
+    NSArray * fetchedRecords = [self fetchRecordsWithPredicate:predicate];
+    NSInteger numberOfDeletedRecords = 0;
     for (NSManagedObject * obj in fetchedRecords) {
         NSInteger result =[self deleteRecord:obj];
         if (result>0) {
-            flag ++;
+            numberOfDeletedRecords ++;
         }
     }
-    return flag;
+    return numberOfDeletedRecords;
+}
+
+-(NSInteger)deleteRecordsWithKey:(NSString *)key value:(NSString*)value{
+    NSArray * fetchedRecords = [self fetchRecordsWithPredicate:[NSPredicate predicateWithFormat:@"%K == %@",key,value]];
+    NSInteger numberOfDeletedRecords = 0;
+    for (NSManagedObject * obj in fetchedRecords) {
+        NSInteger result =[self deleteRecord:obj];
+        if (result>0) {
+            numberOfDeletedRecords ++;
+        }
+    }
+    return numberOfDeletedRecords;
 }
 
 -(NSInteger)updateRecord:(NSDictionary*)updatedRecord  WithPredicate:(NSPredicate*)predicate{
     NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
-    NSManagedObject * oldRecord =[[self fetchFromEntity:_entityName WithPredicate:predicate]firstObject];
+    NSManagedObject * oldRecord =[[self fetchRecordsWithPredicate:predicate]firstObject];
     if(!oldRecord ){
         NSLog(@"Record doesn't exist");
         return UPDATE_FAILED_RECORD_DOESNOT_EXIT;
