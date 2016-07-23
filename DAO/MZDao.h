@@ -21,17 +21,15 @@
 @property NSString * entityName;
 
 
-
-//- (void)saveContext;
-//- (NSURL *)applicationDocumentsDirectory;
-
 -(NSInteger)insertNewRecord:(NSDictionary*)newRecord ;
 
--(NSArray*)fetchFromEntity:(NSString *)entityName; // fetched all the records
--(NSArray *)fetchFromEntity:(NSString *)entityName WithPredicate:(NSPredicate*)predicate;
+-(NSArray*)fetchAllRecords; // fetched all the records
+-(NSArray *)fetchRecordsWithPredicate:(NSPredicate*)predicate;
+-(NSArray *)fetchRecordsWithKey:(NSString *)key value:(NSString*)value;
 
 -(NSInteger)deleteRecord:(NSManagedObject *)record;
 -(NSInteger)deleteRecordsWithPredicate:(NSPredicate *)predicate;
+-(NSInteger)deleteRecordsWithKey:(NSString *)key value:(NSString*)value;
 
 
 -(NSInteger)updateRecord:(NSDictionary*)updatedRecord  WithPredicate:(NSPredicate*)predicate;
