@@ -22,7 +22,7 @@
 
 #pragma mark - Queries
 -(NSInteger)insertNewRecord:(NSDictionary*)newRecord{
-    NSManagedObjectContext *context = [self managedObjectContext];
+    NSManagedObjectContext *context = [MZDao sharedManagedObjectContext];
     
     // Create a new managed object
     NSManagedObject *newManagedRecord = [NSEntityDescription insertNewObjectForEntityForName:_entityName inManagedObjectContext:context];
@@ -39,23 +39,34 @@
     return 1;
 }
 -(NSArray*)fetchAllRecords{
-    NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
+    NSManagedObjectContext *managedObjectContext = [MZDao sharedManagedObjectContext];
     
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] initWithEntityName:_entityName];
     NSArray * result = [[managedObjectContext executeFetchRequest:fetchRequest error:nil] mutableCopy];
-    return result;
+    return [MZDao managedObjectsToDictionaries:result];
     
 }
 -(NSArray *)fetchRecordsWithPredicate:(NSPredicate *)predicate{
-    NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
+    NSManagedObjectContext *managedObjectContext = [MZDao sharedManagedObjectContext];
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] initWithEntityName:_entityName];
     [fetchRequest setPredicate:predicate];
     NSArray * result = [[managedObjectContext executeFetchRequest:fetchRequest error:nil] mutableCopy];
+    
+    return [MZDao managedObjectsToDictionaries:result];
+    
+}
+-(NSArray<NSManagedObject*> *)fetchManagedRecordsWithPredicate:(NSPredicate *)predicate{
+    NSManagedObjectContext *managedObjectContext = [MZDao sharedManagedObjectContext];
+    NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] initWithEntityName:_entityName];
+    [fetchRequest setPredicate:predicate];
+    NSArray * result = [[managedObjectContext executeFetchRequest:fetchRequest error:nil] mutableCopy];
+    
     return result;
     
 }
+
 -(NSArray *)fetchRecordsWithKey:(NSString *)key value:(NSString *)value{
-    NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
+    NSManagedObjectContext *managedObjectContext = [MZDao sharedManagedObjectContext];
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] initWithEntityName:_entityName];
     [fetchRequest setPredicate:[NSPredicate predicateWithFormat:@"%K == %@",key,value]];
     NSArray * result = [[managedObjectContext executeFetchRequest:fetchRequest error:nil] mutableCopy];
@@ -64,7 +75,7 @@
 }
 
 -(NSInteger)deleteRecord:(NSManagedObject *)record{
-    NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
+    NSManagedObjectContext *managedObjectContext = [MZDao sharedManagedObjectContext];
     [managedObjectContext deleteObject:record];
     NSError *error = nil;
     if (![managedObjectContext save:&error]) {
@@ -75,7 +86,7 @@
 }
 
 -(NSInteger)deleteRecordsWithPredicate:(NSPredicate *)predicate{
-    NSArray * fetchedRecords = [self fetchRecordsWithPredicate:predicate];
+    NSArray * fetchedRecords = [self fetchManagedRecordsWithPredicate:predicate];
     NSInteger numberOfDeletedRecords = 0;
     for (NSManagedObject * obj in fetchedRecords) {
         NSInteger result =[self deleteRecord:obj];
@@ -87,7 +98,7 @@
 }
 
 -(NSInteger)deleteRecordsWithKey:(NSString *)key value:(NSString*)value{
-    NSArray * fetchedRecords = [self fetchRecordsWithPredicate:[NSPredicate predicateWithFormat:@"%K == %@",key,value]];
+    NSArray * fetchedRecords = [self fetchManagedRecordsWithPredicate:[NSPredicate predicateWithFormat:@"%K == %@",key,value]];
     NSInteger numberOfDeletedRecords = 0;
     for (NSManagedObject * obj in fetchedRecords) {
         NSInteger result =[self deleteRecord:obj];
@@ -99,8 +110,8 @@
 }
 
 -(NSInteger)updateRecord:(NSDictionary*)updatedRecord  WithPredicate:(NSPredicate*)predicate{
-    NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
-    NSManagedObject * oldRecord =[[self fetchRecordsWithPredicate:predicate]firstObject];
+    NSManagedObjectContext *managedObjectContext = [MZDao sharedManagedObjectContext];
+    NSManagedObject * oldRecord =[[self fetchManagedRecordsWithPredicate:predicate]firstObject];
     if(!oldRecord ){
         NSLog(@"Record doesn't exist");
         return UPDATE_FAILED_RECORD_DOESNOT_EXIT;
@@ -119,11 +130,19 @@
     
     return UPDATE_SUCCESSEDED;
 }
-#pragma mark - Util 
+
+#pragma mark - Util
 +(NSDictionary *)managedObjectToDictionary:(NSManagedObject *)managedObj{
     NSArray *keys = [[[managedObj entity] attributesByName] allKeys];
     NSDictionary *dict = [managedObj dictionaryWithValuesForKeys:keys];
     return dict;
+}
++(NSArray<NSDictionary*> *)managedObjectsToDictionaries:(NSArray*)managedObjs{
+    NSMutableArray * result = [[NSMutableArray alloc]initWithCapacity:[managedObjs count]];
+    for (id obj in managedObjs) {
+        [result addObject:[MZDao managedObjectToDictionary:obj]];
+    }
+    return result;
 }
 #pragma mark - Application Delegate
 - (void)applicationWillTerminate:(UIApplication *)application {
@@ -135,68 +154,71 @@
 
 
 #pragma mark - Core Data stack
-@synthesize managedObjectContext = _managedObjectContext;
-@synthesize managedObjectModel = _managedObjectModel;
-@synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
+//@synthesize managedObjectContext = _managedObjectContext;
+//@synthesize managedObjectModel = _managedObjectModel;
+//@synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
 
-- (NSURL *)applicationDocumentsDirectory {
++ (NSURL *)applicationDocumentsDirectory {
     // The directory the application uses to store the Core Data store file. This code uses a directory named "com.elzokla.coredata" in the application's documents directory.
     return [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
 }
 
-- (NSManagedObjectModel *)managedObjectModel {
++ (NSManagedObjectModel *)sharedManagedObjectModel {
     // The managed object model for the application. It is a fatal error for the application not to be able to find and load its model.
-    if (_managedObjectModel != nil) {
-        return _managedObjectModel;
-    }
-    NSURL *modelURL = [[NSBundle mainBundle] URLForResource:DATABASE_MODEL_NAME withExtension:@"momd"];
-    _managedObjectModel = [[NSManagedObjectModel alloc] initWithContentsOfURL:modelURL];
-    return _managedObjectModel;
-}
+    static NSManagedObjectModel *sharedManagedObjectModel = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSURL *modelURL = [[NSBundle mainBundle] URLForResource:DATABASE_MODEL_NAME withExtension:@"momd"];
+        sharedManagedObjectModel = [[NSManagedObjectModel alloc] initWithContentsOfURL:modelURL];
+    });
+    return sharedManagedObjectModel;
 
-- (NSPersistentStoreCoordinator *)persistentStoreCoordinator {
+ }
+
++ (NSPersistentStoreCoordinator *)sharedPersistentStoreCoordinator {
     // The persistent store coordinator for the application. This implementation creates and returns a coordinator, having added the store for the application to it.
-    if (_persistentStoreCoordinator != nil) {
-        return _persistentStoreCoordinator;
-    }
+    static NSPersistentStoreCoordinator *sharedPersistentStoreCoordinator = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        // Create the coordinator and store
+        sharedPersistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:[MZDao sharedManagedObjectModel]];
+        NSURL *storeURL = [[MZDao applicationDocumentsDirectory] URLByAppendingPathComponent:@"coredata.sqlite"];
+        NSError *error = nil;
+        NSString *failureReason = @"There was an error creating or loading the application's saved data.";
+        if (![sharedPersistentStoreCoordinator addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:storeURL options:nil error:&error]) {
+            // Report any error we got.
+            NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+            dict[NSLocalizedDescriptionKey] = @"Failed to initialize the application's saved data";
+            dict[NSLocalizedFailureReasonErrorKey] = failureReason;
+            dict[NSUnderlyingErrorKey] = error;
+            error = [NSError errorWithDomain:@"YOUR_ERROR_DOMAIN" code:9999 userInfo:dict];
+            // Replace this with code to handle the error appropriately.
+            // abort() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
+            NSLog(@"Unresolved error %@, %@", error, [error userInfo]);
+            //        abort();
+        }
+    });
+    return sharedPersistentStoreCoordinator;
     
-    // Create the coordinator and store
     
-    _persistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:[self managedObjectModel]];
-    NSURL *storeURL = [[self applicationDocumentsDirectory] URLByAppendingPathComponent:@"coredata.sqlite"];
-    NSError *error = nil;
-    NSString *failureReason = @"There was an error creating or loading the application's saved data.";
-    if (![_persistentStoreCoordinator addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:storeURL options:nil error:&error]) {
-        // Report any error we got.
-        NSMutableDictionary *dict = [NSMutableDictionary dictionary];
-        dict[NSLocalizedDescriptionKey] = @"Failed to initialize the application's saved data";
-        dict[NSLocalizedFailureReasonErrorKey] = failureReason;
-        dict[NSUnderlyingErrorKey] = error;
-        error = [NSError errorWithDomain:@"YOUR_ERROR_DOMAIN" code:9999 userInfo:dict];
-        // Replace this with code to handle the error appropriately.
-        // abort() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-        NSLog(@"Unresolved error %@, %@", error, [error userInfo]);
-//        abort();
-    }
     
-    return _persistentStoreCoordinator;
-}
+ }
 
 
-- (NSManagedObjectContext *)managedObjectContext {
++ (NSManagedObjectContext *)sharedManagedObjectContext {
     // Returns the managed object context for the application (which is already bound to the persistent store coordinator for the application.)
-    if (_managedObjectContext != nil) {
-        return _managedObjectContext;
-    }
+    static NSManagedObjectContext *sharedManagedObjectContext = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSPersistentStoreCoordinator *coordinator = [MZDao sharedPersistentStoreCoordinator];
+        if (coordinator) {
+            sharedManagedObjectContext = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
+            [sharedManagedObjectContext setPersistentStoreCoordinator:coordinator];
+        }
+    });
+    return sharedManagedObjectContext;
     
-    NSPersistentStoreCoordinator *coordinator = [self persistentStoreCoordinator];
-    if (!coordinator) {
-        return nil;
-    }
-    _managedObjectContext = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
-    [_managedObjectContext setPersistentStoreCoordinator:coordinator];
-    return _managedObjectContext;
-}
+ }
 
 #pragma mark - Core Data Saving support
 
